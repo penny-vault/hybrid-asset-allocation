@@ -45,14 +45,15 @@ func (s *HybridAssetAllocation) Name() string {
 	return "Hybrid Asset Allocation"
 }
 
-func (s *HybridAssetAllocation) Setup(e *engine.Engine) {
+func (s *HybridAssetAllocation) Setup(eng *engine.Engine) {
 	tc, err := tradecron.New("@monthend", tradecron.MarketHours{Open: 930, Close: 1600})
 	if err != nil {
 		panic(err)
 	}
-	e.Schedule(tc)
-	e.SetBenchmark(e.Asset("VFINX"))
-	e.RiskFreeAsset(e.Asset("DGS3MO"))
+
+	eng.Schedule(tc)
+	eng.SetBenchmark(eng.Asset("VFINX"))
+	eng.RiskFreeAsset(eng.Asset("DGS3MO"))
 }
 
 func (s *HybridAssetAllocation) Describe() engine.StrategyDescription {
@@ -65,7 +66,7 @@ func (s *HybridAssetAllocation) Describe() engine.StrategyDescription {
 	}
 }
 
-func (s *HybridAssetAllocation) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) error {
+func (s *HybridAssetAllocation) Compute(ctx context.Context, eng *engine.Engine, strategyPortfolio portfolio.Portfolio) error {
 	// 1. Fetch 12-month window of monthly close prices for all universes.
 	offensiveDF, err := s.OffensiveUniverse.Window(ctx, portfolio.Months(12), data.MetricClose)
 	if err != nil {
@@ -106,17 +107,18 @@ func (s *HybridAssetAllocation) Compute(ctx context.Context, e *engine.Engine, p
 		return nil
 	}
 
-	offensiveMom.Annotate(p)
-	defensiveMom.Annotate(p)
-	canaryMom.Annotate(p)
+	offensiveMom.Annotate(strategyPortfolio)
+	defensiveMom.Annotate(strategyPortfolio)
+	canaryMom.Annotate(strategyPortfolio)
 
 	// 4. Find best defensive (cash) asset by momentum.
 	bestCash, bestCashScore := bestByMomentum(defensiveMom)
 
-	ts := e.CurrentDate().Unix()
+	ts := eng.CurrentDate().Unix()
 
 	// 5. Check canary: if ANY canary asset has non-positive momentum, go 100% defensive.
 	canaryBad := false
+
 	for _, a := range canaryMom.AssetList() {
 		if canaryMom.Value(a, data.MetricClose) <= 0 {
 			canaryBad = true
@@ -128,11 +130,14 @@ func (s *HybridAssetAllocation) Compute(ctx context.Context, e *engine.Engine, p
 	if canaryBad {
 		regime = "defensive"
 	}
-	p.Annotate(ts, "regime", regime)
-	p.Annotate(ts, "best-cash", bestCash.Ticker)
+
+	strategyPortfolio.Annotate(ts, "regime", regime)
+	strategyPortfolio.Annotate(ts, "best-cash", bestCash.Ticker)
+
 	_ = bestCashScore
 
 	members := make(map[asset.Asset]float64)
+
 	var justification string
 
 	if canaryBad {
@@ -147,9 +152,11 @@ func (s *HybridAssetAllocation) Compute(ctx context.Context, e *engine.Engine, p
 		}
 
 		var scores []assetScore
+
 		for _, a := range offensiveMom.AssetList() {
 			scores = append(scores, assetScore{a: a, score: offensiveMom.Value(a, data.MetricClose)})
 		}
+
 		sort.Slice(scores, func(i, j int) bool {
 			return scores[i].score > scores[j].score
 		})
@@ -173,15 +180,15 @@ func (s *HybridAssetAllocation) Compute(ctx context.Context, e *engine.Engine, p
 		justification = fmt.Sprintf("offensive: top %d, cash=%s", topX, bestCash.Ticker)
 	}
 
-	p.Annotate(ts, "justification", justification)
+	strategyPortfolio.Annotate(ts, "justification", justification)
 
 	allocation := portfolio.Allocation{
-		Date:          e.CurrentDate(),
+		Date:          eng.CurrentDate(),
 		Members:       members,
 		Justification: justification,
 	}
 
-	if err := p.RebalanceTo(ctx, allocation); err != nil {
+	if err := strategyPortfolio.RebalanceTo(ctx, allocation); err != nil {
 		return fmt.Errorf("rebalance failed: %w", err)
 	}
 
@@ -199,13 +206,16 @@ func momentum13612U(df *data.DataFrame) *data.DataFrame {
 	ret3 := df.Pct(3)
 	ret6 := df.Pct(6)
 	ret12 := df.Pct(12)
+
 	return ret1.Add(ret3).Add(ret6).Add(ret12).DivScalar(4)
 }
 
 // bestByMomentum returns the asset with the highest momentum score from a DataFrame.
 func bestByMomentum(mom *data.DataFrame) (asset.Asset, float64) {
 	var best asset.Asset
+
 	bestScore := math.Inf(-1)
+
 	for _, a := range mom.AssetList() {
 		val := mom.Value(a, data.MetricClose)
 		if val > bestScore {
@@ -213,5 +223,6 @@ func bestByMomentum(mom *data.DataFrame) (asset.Asset, float64) {
 			best = a
 		}
 	}
+
 	return best, bestScore
 }
