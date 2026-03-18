@@ -53,7 +53,6 @@ func (s *HybridAssetAllocation) Setup(eng *engine.Engine) {
 
 	eng.Schedule(tc)
 	eng.SetBenchmark(eng.Asset("VFINX"))
-	eng.RiskFreeAsset(eng.Asset("DGS3MO"))
 }
 
 func (s *HybridAssetAllocation) Describe() engine.StrategyDescription {
