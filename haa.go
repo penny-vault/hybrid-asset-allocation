@@ -29,6 +29,7 @@ import (
 	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/tradecron"
 	"github.com/penny-vault/pvbt/universe"
+	"github.com/rs/zerolog/log"
 )
 
 //go:embed README.md
@@ -66,18 +67,21 @@ func (s *HybridAssetAllocation) Describe() engine.StrategyDescription {
 }
 
 func (s *HybridAssetAllocation) Compute(ctx context.Context, eng *engine.Engine, strategyPortfolio portfolio.Portfolio) error {
-	// 1. Fetch 12-month window of monthly close prices for all universes.
-	offensiveDF, err := s.OffensiveUniverse.Window(ctx, portfolio.Months(12), data.MetricClose)
+	log.Debug().Time("date", eng.CurrentDate()).Msg("Compute called")
+
+	// 1. Fetch 13-month window of adjusted close prices for all universes.
+	// We need 13 months so that after monthly downsampling we have enough rows for Pct(12).
+	offensiveDF, err := s.OffensiveUniverse.Window(ctx, portfolio.Months(13), data.AdjClose)
 	if err != nil {
 		return fmt.Errorf("failed to fetch offensive universe prices: %w", err)
 	}
 
-	defensiveDF, err := s.DefensiveUniverse.Window(ctx, portfolio.Months(12), data.MetricClose)
+	defensiveDF, err := s.DefensiveUniverse.Window(ctx, portfolio.Months(13), data.AdjClose)
 	if err != nil {
 		return fmt.Errorf("failed to fetch defensive universe prices: %w", err)
 	}
 
-	canaryDF, err := s.CanaryUniverse.Window(ctx, portfolio.Months(12), data.MetricClose)
+	canaryDF, err := s.CanaryUniverse.Window(ctx, portfolio.Months(13), data.AdjClose)
 	if err != nil {
 		return fmt.Errorf("failed to fetch canary universe prices: %w", err)
 	}
@@ -88,22 +92,36 @@ func (s *HybridAssetAllocation) Compute(ctx context.Context, eng *engine.Engine,
 	canaryMonthly := canaryDF.Downsample(data.Monthly).Last()
 
 	// Need at least 13 rows for Pct(12) to produce valid values.
+	log.Debug().Int("offensiveLen", offensiveMonthly.Len()).Int("defensiveLen", defensiveMonthly.Len()).Int("canaryLen", canaryMonthly.Len()).Msg("monthly data lengths")
+
 	if offensiveMonthly.Len() < 13 || defensiveMonthly.Len() < 13 || canaryMonthly.Len() < 13 {
+		log.Debug().Msg("insufficient data, returning nil")
 		return nil
 	}
 
 	// 3. Compute 13612U momentum (unweighted average of 1, 3, 6, 12-month returns) for all universes.
-	offensiveMom := momentum13612U(offensiveMonthly)
-	offensiveMom = offensiveMom.Drop(math.NaN()).Last()
+	offensiveMom := momentum13612U(offensiveMonthly).Last()
+	defensiveMom := momentum13612U(defensiveMonthly).Last()
+	canaryMom := momentum13612U(canaryMonthly).Last()
 
-	defensiveMom := momentum13612U(defensiveMonthly)
-	defensiveMom = defensiveMom.Drop(math.NaN()).Last()
-
-	canaryMom := momentum13612U(canaryMonthly)
-	canaryMom = canaryMom.Drop(math.NaN()).Last()
+	log.Debug().Int("offensiveMomLen", offensiveMom.Len()).Int("defensiveMomLen", defensiveMom.Len()).Int("canaryMomLen", canaryMom.Len()).Msg("momentum data lengths")
 
 	if offensiveMom.Len() == 0 || defensiveMom.Len() == 0 || canaryMom.Len() == 0 {
-		return nil
+		return fmt.Errorf("momentum data empty on %s (offensive=%d, defensive=%d, canary=%d)",
+			eng.CurrentDate().Format("2006-01-02"), offensiveMom.Len(), defensiveMom.Len(), canaryMom.Len())
+	}
+
+	// Validate that no momentum values are NaN -- this indicates missing price data.
+	if err := validateMomentum("offensive", offensiveMom); err != nil {
+		return err
+	}
+
+	if err := validateMomentum("defensive", defensiveMom); err != nil {
+		return err
+	}
+
+	if err := validateMomentum("canary", canaryMom); err != nil {
+		return err
 	}
 
 	offensiveMom.Annotate(strategyPortfolio)
@@ -119,7 +137,7 @@ func (s *HybridAssetAllocation) Compute(ctx context.Context, eng *engine.Engine,
 	canaryBad := false
 
 	for _, a := range canaryMom.AssetList() {
-		if canaryMom.Value(a, data.MetricClose) <= 0 {
+		if canaryMom.Value(a, data.AdjClose) <= 0 {
 			canaryBad = true
 			break
 		}
@@ -130,10 +148,10 @@ func (s *HybridAssetAllocation) Compute(ctx context.Context, eng *engine.Engine,
 		regime = "defensive"
 	}
 
+	log.Debug().Str("regime", regime).Str("bestCash", bestCash.Ticker).Float64("bestCashScore", bestCashScore).Msg("regime decision")
+
 	strategyPortfolio.Annotate(ts, "regime", regime)
 	strategyPortfolio.Annotate(ts, "best-cash", bestCash.Ticker)
-
-	_ = bestCashScore
 
 	members := make(map[asset.Asset]float64)
 
@@ -153,7 +171,7 @@ func (s *HybridAssetAllocation) Compute(ctx context.Context, eng *engine.Engine,
 		var scores []assetScore
 
 		for _, a := range offensiveMom.AssetList() {
-			scores = append(scores, assetScore{a: a, score: offensiveMom.Value(a, data.MetricClose)})
+			scores = append(scores, assetScore{a: a, score: offensiveMom.Value(a, data.AdjClose)})
 		}
 
 		sort.Slice(scores, func(i, j int) bool {
@@ -216,7 +234,7 @@ func bestByMomentum(mom *data.DataFrame) (asset.Asset, float64) {
 	bestScore := math.Inf(-1)
 
 	for _, a := range mom.AssetList() {
-		val := mom.Value(a, data.MetricClose)
+		val := mom.Value(a, data.AdjClose)
 		if val > bestScore {
 			bestScore = val
 			best = a
@@ -224,4 +242,17 @@ func bestByMomentum(mom *data.DataFrame) (asset.Asset, float64) {
 	}
 
 	return best, bestScore
+}
+
+// validateMomentum checks that no asset in the DataFrame has a NaN momentum value.
+// NaN indicates missing price data in the backend.
+func validateMomentum(universe string, mom *data.DataFrame) error {
+	for _, a := range mom.AssetList() {
+		val := mom.Value(a, data.AdjClose)
+		if math.IsNaN(val) {
+			return fmt.Errorf("%s universe: %s has NaN momentum (missing AdjClose data)", universe, a.Ticker)
+		}
+	}
+
+	return nil
 }
