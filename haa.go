@@ -21,13 +21,13 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
-	"github.com/penny-vault/pvbt/tradecron"
 	"github.com/penny-vault/pvbt/universe"
 	"github.com/rs/zerolog/log"
 )
@@ -46,15 +46,7 @@ func (s *HybridAssetAllocation) Name() string {
 	return "Hybrid Asset Allocation"
 }
 
-func (s *HybridAssetAllocation) Setup(eng *engine.Engine) {
-	tc, err := tradecron.New("@monthend", tradecron.MarketHours{Open: 930, Close: 1600})
-	if err != nil {
-		panic(err)
-	}
-
-	eng.Schedule(tc)
-	eng.SetBenchmark(eng.Asset("VFINX"))
-}
+func (s *HybridAssetAllocation) Setup(_ *engine.Engine) {}
 
 func (s *HybridAssetAllocation) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{
@@ -63,10 +55,12 @@ func (s *HybridAssetAllocation) Describe() engine.StrategyDescription {
 		Source:      "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4346906",
 		Version:     "1.0.0",
 		VersionDate: time.Date(2026, 3, 14, 0, 0, 0, 0, time.UTC),
+		Schedule:    "@monthend",
+		Benchmark:   "VFINX",
 	}
 }
 
-func (s *HybridAssetAllocation) Compute(ctx context.Context, eng *engine.Engine, strategyPortfolio portfolio.Portfolio) error {
+func (s *HybridAssetAllocation) Compute(ctx context.Context, eng *engine.Engine, strategyPortfolio portfolio.Portfolio, batch *portfolio.Batch) error {
 	log.Debug().Time("date", eng.CurrentDate()).Msg("Compute called")
 
 	// 1. Fetch 13-month window of adjusted close prices for all universes.
@@ -124,14 +118,35 @@ func (s *HybridAssetAllocation) Compute(ctx context.Context, eng *engine.Engine,
 		return err
 	}
 
-	offensiveMom.Annotate(strategyPortfolio)
-	defensiveMom.Annotate(strategyPortfolio)
-	canaryMom.Annotate(strategyPortfolio)
+	for _, a := range offensiveMom.AssetList() {
+		for _, m := range offensiveMom.MetricList() {
+			v := offensiveMom.Value(a, m)
+			if !math.IsNaN(v) {
+				batch.Annotate(a.Ticker+"/"+string(m), strconv.FormatFloat(v, 'f', -1, 64))
+			}
+		}
+	}
+
+	for _, a := range defensiveMom.AssetList() {
+		for _, m := range defensiveMom.MetricList() {
+			v := defensiveMom.Value(a, m)
+			if !math.IsNaN(v) {
+				batch.Annotate(a.Ticker+"/"+string(m), strconv.FormatFloat(v, 'f', -1, 64))
+			}
+		}
+	}
+
+	for _, a := range canaryMom.AssetList() {
+		for _, m := range canaryMom.MetricList() {
+			v := canaryMom.Value(a, m)
+			if !math.IsNaN(v) {
+				batch.Annotate(a.Ticker+"/"+string(m), strconv.FormatFloat(v, 'f', -1, 64))
+			}
+		}
+	}
 
 	// 4. Find best defensive (cash) asset by momentum.
 	bestCash, bestCashScore := bestByMomentum(defensiveMom)
-
-	ts := eng.CurrentDate().Unix()
 
 	// 5. Check canary: if ANY canary asset has non-positive momentum, go 100% defensive.
 	canaryBad := false
@@ -150,8 +165,8 @@ func (s *HybridAssetAllocation) Compute(ctx context.Context, eng *engine.Engine,
 
 	log.Debug().Str("regime", regime).Str("bestCash", bestCash.Ticker).Float64("bestCashScore", bestCashScore).Msg("regime decision")
 
-	strategyPortfolio.Annotate(ts, "regime", regime)
-	strategyPortfolio.Annotate(ts, "best-cash", bestCash.Ticker)
+	batch.Annotate("regime", regime)
+	batch.Annotate("best-cash", bestCash.Ticker)
 
 	members := make(map[asset.Asset]float64)
 
@@ -197,7 +212,7 @@ func (s *HybridAssetAllocation) Compute(ctx context.Context, eng *engine.Engine,
 		justification = fmt.Sprintf("offensive: top %d, cash=%s", topX, bestCash.Ticker)
 	}
 
-	strategyPortfolio.Annotate(ts, "justification", justification)
+	batch.Annotate("justification", justification)
 
 	allocation := portfolio.Allocation{
 		Date:          eng.CurrentDate(),
@@ -205,7 +220,7 @@ func (s *HybridAssetAllocation) Compute(ctx context.Context, eng *engine.Engine,
 		Justification: justification,
 	}
 
-	if err := strategyPortfolio.RebalanceTo(ctx, allocation); err != nil {
+	if err := batch.RebalanceTo(ctx, allocation); err != nil {
 		return fmt.Errorf("rebalance failed: %w", err)
 	}
 
