@@ -13,3 +13,4 @@ go.work.sum
 .env
 hybrid-asset-allocation
 *.db
+!haa/testdata/snapshot.db

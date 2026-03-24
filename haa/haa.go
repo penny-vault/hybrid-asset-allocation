@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package haa
 
 import (
 	"context"
@@ -36,10 +36,10 @@ import (
 var description string
 
 type HybridAssetAllocation struct {
-	OffensiveUniverse universe.Universe `pvbt:"offensive-universe" desc:"Offensive (risky) assets to select from" default:"SPY,IWM,VEA,VWO,VNQ,DBC,IEF,TLT" suggest:"HAA-Balanced=SPY,IWM,VEA,VWO,VNQ,DBC,IEF,TLT|HAA-Simple=SPY"`
-	DefensiveUniverse universe.Universe `pvbt:"defensive-universe" desc:"Defensive assets for risk-off periods" default:"BIL,IEF" suggest:"HAA-Balanced=BIL,IEF|HAA-Simple=BIL,IEF"`
-	CanaryUniverse    universe.Universe `pvbt:"canary-universe" desc:"Single canary asset for crash protection" default:"TIP" suggest:"HAA-Balanced=TIP|HAA-Simple=TIP"`
-	TopX              int               `pvbt:"top-x" desc:"Number of top offensive assets to select (half the universe)" default:"4" suggest:"HAA-Balanced=4|HAA-Simple=1"`
+	OffensiveUniverse universe.Universe `pvbt:"offensive-universe" desc:"Offensive (risky) assets to select from" default:"SPY,IWM,VEA,VWO,VNQ,DBC,IEF,TLT" suggest:"HAA-Balanced=SPY,IWM,VEA,VWO,VNQ,DBC,IEF,TLT|HAA-Simple=SPY|AS-Balanced=SPY,IWM,IEFA,IEMG,VNQ,PDBC,IEF,TLT|AS-Simple=SPY"`
+	DefensiveUniverse universe.Universe `pvbt:"defensive-universe" desc:"Defensive assets for risk-off periods" default:"BIL,IEF" suggest:"HAA-Balanced=BIL,IEF|HAA-Simple=BIL,IEF|AS-Balanced=BIL,IEF|AS-Simple=BIL,IEF"`
+	CanaryUniverse    universe.Universe `pvbt:"canary-universe" desc:"Single canary asset for crash protection" default:"TIP" suggest:"HAA-Balanced=TIP|HAA-Simple=TIP|AS-Balanced=TIP|AS-Simple=TIP"`
+	TopX              int               `pvbt:"top-x" desc:"Number of top offensive assets to select (half the universe)" default:"4" suggest:"HAA-Balanced=4|HAA-Simple=1|AS-Balanced=4|AS-Simple=1"`
 }
 
 func (s *HybridAssetAllocation) Name() string {
