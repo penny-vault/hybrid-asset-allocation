@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/penny-vault/hybrid-asset-allocation/haa"
+	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
@@ -77,7 +78,7 @@ var _ = Describe("HybridAssetAllocation", func() {
 
 		tickers := map[string]bool{}
 		for _, t := range txns {
-			if t.Type == portfolio.BuyTransaction || t.Type == portfolio.SellTransaction {
+			if t.Type == asset.BuyTransaction || t.Type == asset.SellTransaction {
 				tickers[t.Asset.Ticker] = true
 			}
 		}
@@ -97,13 +98,13 @@ var _ = Describe("HybridAssetAllocation", func() {
 
 		type trade struct {
 			date   string
-			txType portfolio.TransactionType
+			txType asset.TransactionType
 			ticker string
 		}
 
 		var trades []trade
 		for _, t := range txns {
-			if t.Type == portfolio.BuyTransaction || t.Type == portfolio.SellTransaction {
+			if t.Type == asset.BuyTransaction || t.Type == asset.SellTransaction {
 				trades = append(trades, trade{
 					date:   t.Date.In(nyc).Format("2006-01-02"),
 					txType: t.Type,
@@ -127,78 +128,78 @@ var _ = Describe("HybridAssetAllocation", func() {
 
 		expected := []trade{
 			// 2025-01-31: offensive top 4 = SPY, IWM, VWO, VEA
-			{"2025-01-31", portfolio.BuyTransaction, "IWM"},
-			{"2025-01-31", portfolio.BuyTransaction, "SPY"},
-			{"2025-01-31", portfolio.BuyTransaction, "VEA"},
-			{"2025-01-31", portfolio.BuyTransaction, "VWO"},
+			{"2025-01-31", asset.BuyTransaction, "IWM"},
+			{"2025-01-31", asset.BuyTransaction, "SPY"},
+			{"2025-01-31", asset.BuyTransaction, "VEA"},
+			{"2025-01-31", asset.BuyTransaction, "VWO"},
 			// 2025-02-28: top 4 = SPY, VWO, DBC, VNQ
-			{"2025-02-28", portfolio.SellTransaction, "IWM"},
-			{"2025-02-28", portfolio.SellTransaction, "VEA"},
-			{"2025-02-28", portfolio.SellTransaction, "VWO"},
-			{"2025-02-28", portfolio.BuyTransaction, "DBC"},
-			{"2025-02-28", portfolio.BuyTransaction, "VNQ"},
+			{"2025-02-28", asset.SellTransaction, "IWM"},
+			{"2025-02-28", asset.SellTransaction, "VEA"},
+			{"2025-02-28", asset.SellTransaction, "VWO"},
+			{"2025-02-28", asset.BuyTransaction, "DBC"},
+			{"2025-02-28", asset.BuyTransaction, "VNQ"},
 			// 2025-03-31: top 4 = DBC, VWO, VEA, IEF
-			{"2025-03-31", portfolio.SellTransaction, "DBC"},
-			{"2025-03-31", portfolio.SellTransaction, "SPY"},
-			{"2025-03-31", portfolio.SellTransaction, "VNQ"},
-			{"2025-03-31", portfolio.SellTransaction, "VWO"},
-			{"2025-03-31", portfolio.BuyTransaction, "IEF"},
-			{"2025-03-31", portfolio.BuyTransaction, "VEA"},
+			{"2025-03-31", asset.SellTransaction, "DBC"},
+			{"2025-03-31", asset.SellTransaction, "SPY"},
+			{"2025-03-31", asset.SellTransaction, "VNQ"},
+			{"2025-03-31", asset.SellTransaction, "VWO"},
+			{"2025-03-31", asset.BuyTransaction, "IEF"},
+			{"2025-03-31", asset.BuyTransaction, "VEA"},
 			// 2025-04-30: top 4 = VEA, IEF, VWO, VNQ
-			{"2025-04-30", portfolio.SellTransaction, "DBC"},
-			{"2025-04-30", portfolio.SellTransaction, "IEF"},
-			{"2025-04-30", portfolio.SellTransaction, "VEA"},
-			{"2025-04-30", portfolio.SellTransaction, "VWO"},
-			{"2025-04-30", portfolio.BuyTransaction, "VNQ"},
+			{"2025-04-30", asset.SellTransaction, "DBC"},
+			{"2025-04-30", asset.SellTransaction, "IEF"},
+			{"2025-04-30", asset.SellTransaction, "VEA"},
+			{"2025-04-30", asset.SellTransaction, "VWO"},
+			{"2025-04-30", asset.BuyTransaction, "VNQ"},
 			// 2025-05-30: top 4 = VEA, VWO, SPY, IEF
-			{"2025-05-30", portfolio.SellTransaction, "VEA"},
-			{"2025-05-30", portfolio.SellTransaction, "VNQ"},
-			{"2025-05-30", portfolio.SellTransaction, "VWO"},
-			{"2025-05-30", portfolio.BuyTransaction, "IEF"},
-			{"2025-05-30", portfolio.BuyTransaction, "SPY"},
+			{"2025-05-30", asset.SellTransaction, "VEA"},
+			{"2025-05-30", asset.SellTransaction, "VNQ"},
+			{"2025-05-30", asset.SellTransaction, "VWO"},
+			{"2025-05-30", asset.BuyTransaction, "IEF"},
+			{"2025-05-30", asset.BuyTransaction, "SPY"},
 			// 2025-06-30: top 4 = VEA, VWO, SPY, IWM
-			{"2025-06-30", portfolio.SellTransaction, "IEF"},
-			{"2025-06-30", portfolio.SellTransaction, "VWO"},
-			{"2025-06-30", portfolio.BuyTransaction, "IWM"},
-			{"2025-06-30", portfolio.BuyTransaction, "VEA"},
+			{"2025-06-30", asset.SellTransaction, "IEF"},
+			{"2025-06-30", asset.SellTransaction, "VWO"},
+			{"2025-06-30", asset.BuyTransaction, "IWM"},
+			{"2025-06-30", asset.BuyTransaction, "VEA"},
 			// 2025-07-31: top 4 = VWO, SPY, VEA, DBC
-			{"2025-07-31", portfolio.SellTransaction, "IWM"},
-			{"2025-07-31", portfolio.BuyTransaction, "DBC"},
-			{"2025-07-31", portfolio.BuyTransaction, "VEA"},
-			{"2025-07-31", portfolio.BuyTransaction, "VWO"},
+			{"2025-07-31", asset.SellTransaction, "IWM"},
+			{"2025-07-31", asset.BuyTransaction, "DBC"},
+			{"2025-07-31", asset.BuyTransaction, "VEA"},
+			{"2025-07-31", asset.BuyTransaction, "VWO"},
 			// 2025-08-29: top 4 = VWO, VEA, IWM, SPY
-			{"2025-08-29", portfolio.SellTransaction, "DBC"},
-			{"2025-08-29", portfolio.SellTransaction, "VEA"},
-			{"2025-08-29", portfolio.SellTransaction, "VWO"},
-			{"2025-08-29", portfolio.BuyTransaction, "IWM"},
-			{"2025-08-29", portfolio.BuyTransaction, "VEA"},
-			{"2025-08-29", portfolio.BuyTransaction, "VWO"},
+			{"2025-08-29", asset.SellTransaction, "DBC"},
+			{"2025-08-29", asset.SellTransaction, "VEA"},
+			{"2025-08-29", asset.SellTransaction, "VWO"},
+			{"2025-08-29", asset.BuyTransaction, "IWM"},
+			{"2025-08-29", asset.BuyTransaction, "VEA"},
+			{"2025-08-29", asset.BuyTransaction, "VWO"},
 			// 2025-09-30: top 4 = VWO, SPY, IWM, VEA (minor rebalance)
-			{"2025-09-30", portfolio.SellTransaction, "VWO"},
-			{"2025-09-30", portfolio.BuyTransaction, "IWM"},
-			{"2025-09-30", portfolio.BuyTransaction, "VEA"},
-			{"2025-09-30", portfolio.BuyTransaction, "VWO"},
+			{"2025-09-30", asset.SellTransaction, "VWO"},
+			{"2025-09-30", asset.BuyTransaction, "IWM"},
+			{"2025-09-30", asset.BuyTransaction, "VEA"},
+			{"2025-09-30", asset.BuyTransaction, "VWO"},
 			// 2025-10-31: top 4 = VWO, IWM, SPY, VEA (minor rebalance)
-			{"2025-10-31", portfolio.SellTransaction, "VEA"},
-			{"2025-10-31", portfolio.BuyTransaction, "VEA"},
-			{"2025-10-31", portfolio.BuyTransaction, "VWO"},
+			{"2025-10-31", asset.SellTransaction, "VEA"},
+			{"2025-10-31", asset.BuyTransaction, "VEA"},
+			{"2025-10-31", asset.BuyTransaction, "VWO"},
 			// 2025-11-28: top 4 = VEA, VWO, SPY, IWM (minor rebalance)
-			{"2025-11-28", portfolio.SellTransaction, "VEA"},
-			{"2025-11-28", portfolio.BuyTransaction, "VEA"},
-			{"2025-11-28", portfolio.BuyTransaction, "VWO"},
+			{"2025-11-28", asset.SellTransaction, "VEA"},
+			{"2025-11-28", asset.BuyTransaction, "VEA"},
+			{"2025-11-28", asset.BuyTransaction, "VWO"},
 			// 2025-12-31: top 4 = VEA, VWO, SPY, IWM (minor rebalance)
-			{"2025-12-31", portfolio.SellTransaction, "VEA"},
-			{"2025-12-31", portfolio.BuyTransaction, "IWM"},
-			{"2025-12-31", portfolio.BuyTransaction, "VWO"},
+			{"2025-12-31", asset.SellTransaction, "VEA"},
+			{"2025-12-31", asset.BuyTransaction, "IWM"},
+			{"2025-12-31", asset.BuyTransaction, "VWO"},
 			// 2026-01-30: top 4 = VEA, VWO, DBC, IWM
-			{"2026-01-30", portfolio.SellTransaction, "SPY"},
-			{"2026-01-30", portfolio.SellTransaction, "VEA"},
-			{"2026-01-30", portfolio.SellTransaction, "VWO"},
-			{"2026-01-30", portfolio.BuyTransaction, "DBC"},
+			{"2026-01-30", asset.SellTransaction, "SPY"},
+			{"2026-01-30", asset.SellTransaction, "VEA"},
+			{"2026-01-30", asset.SellTransaction, "VWO"},
+			{"2026-01-30", asset.BuyTransaction, "DBC"},
 			// 2026-02-27: top 4 = VEA, VWO, DBC, IWM (minor rebalance)
-			{"2026-02-27", portfolio.SellTransaction, "VEA"},
-			{"2026-02-27", portfolio.BuyTransaction, "DBC"},
-			{"2026-02-27", portfolio.BuyTransaction, "IWM"},
+			{"2026-02-27", asset.SellTransaction, "VEA"},
+			{"2026-02-27", asset.BuyTransaction, "DBC"},
+			{"2026-02-27", asset.BuyTransaction, "IWM"},
 		}
 
 		Expect(trades).To(HaveLen(len(expected)), "trade count mismatch")
