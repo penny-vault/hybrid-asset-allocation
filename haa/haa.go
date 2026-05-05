@@ -56,7 +56,7 @@ func (s *HybridAssetAllocation) Describe() engine.StrategyDescription {
 		Version:     "1.0.0",
 		VersionDate: time.Date(2026, 3, 14, 0, 0, 0, 0, time.UTC),
 		Schedule:    "@monthend",
-		Benchmark:   "VFINX",
+		Benchmark:   "SPY",
 	}
 }
 
